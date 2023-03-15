@@ -24,18 +24,28 @@ variables = {
 }
 
 MNEMONICS = {
-    "MOVE": lambda x, y: variables.update({x: int(y)}),
+    "MOVE": lambda x, y: variables.update({x: y}),
     "CMP": lambda x, y: False if variables[x] != int(y) else None,
     "MULT": lambda x, y: variables.update({x: variables[x] * variables[y]})
 }
 
 def interpret(INPUT):
     lines = INPUT.split('\n')
-    for line in lines:
-        parts = line.split()
-        print(parts)
-        # instruction = parts[0]
-        # result = MNEMONICS[instruction](*parts[1:])
+    labels = {}
+    for l, line in enumerate(lines):
+        parts = line.split("--")[0].split()
+        if not parts:
+            continue
+        # print(labels)
+        if parts[0][:-1] in labels.keys():
+            print("Label called here:")
+            continue
+        if parts[0].endswith(":"):
+            labels[parts[0][:-1]] = l
+            parts = parts[1:]
+            print(labels)
+        instruction = parts[0]
+        result = MNEMONICS[instruction](*parts[1:])
         # if result is False:
         #     return False
     return variables

@@ -99,3 +99,6 @@ fim:            HALT
   Assembly é uma linguagem que faz uma associação de uma linguagem de mãquina para texto.
   Quando a pessoa fazia u programa em Assembly, ele precisava saber a linha para saltar no código.
 
+Dica do prof:
+* Se pensar de pouquinho em pouquinho e avançar um pouco...
+* Leia o programa, faça análise léxica dos dados
