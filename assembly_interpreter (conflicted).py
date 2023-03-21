@@ -20,66 +20,44 @@ fim:        HALT
 """
 
 variables = {
-    'CR': -1
 
 }
-
-
-labels = {}
 
 
 MNEMONICS = {
     "MOVE": lambda x, y: variables.update({x: y}),
     "CMP": lambda x, y: variables.update({"CR": variables[x] == int(y)}),
     "MULT": lambda x, y: variables.update({x: variables[x] * variables[y]}),
-    "SUBT": lambda x, y: variables.update({x: variables[x] - variables[y]}),
-    "JUMP": lambda x: labels[x] if labels.get(x) else -1,
-    "JTRUE": lambda x: labels[x] if variables['CR'] == 1 else -1,
-    "JFALSE": lambda x: labels[x] if variables['CR'] != 1 else -1,
 }
 
 def interpret(INPUT):
     lines = INPUT.split('\n')
+    labels = {}
     line_index = 0
 
-    # map labels
-    for l, line in enumerate(lines):
-        line_splitted = line.replace(",", "").split("--")[0].split()
+    while line_index < len(lines):
+        line_splitted = lines[line_index].split("--")[0].split()
+        continue
         if not line_splitted:
+            line_index += 1
+            continue
+        # print(labels)
+        if line_splitted[0][:-1] in labels.keys():
+            print("Label called here:")
             line_index += 1
             continue
         if line_splitted[0].endswith(":"):
             labels[line_splitted[0][:-1]] = l
             line_splitted = line_splitted[1:]
-
-    # run code
-    while line_index < len(lines):
-        line_splitted = lines[line_index].replace(",", "").split("--")[0].split()
-        if not line_splitted:
-            line_index += 1
-            continue
-        if line_splitted[0].endswith(":"):
-            if len(line_splitted) == 1:
-                line_index += 1
-                continue
-            line_splitted = line_splitted[1:]
-
-        # Call instruction
+            print(labels)
         instruction = line_splitted[0]
-        print("INST:", instruction)
-
-        # jump
-        if instruction in ["JUMP", "JTRUE", "JFALSE"]:
-            print("jump", line_index, labels[line_splitted[1]])
-            exit(0)
-            line_index = labels[line_splitted[1]]
-            continue
-
-        # 
+        print("MN", instruction)
         result = MNEMONICS[instruction](*line_splitted[1:])
         # if result is False:
         #     return False
         line_index += 1
+
+    return variables
 
 result = interpret(INPUT)
 print(result)

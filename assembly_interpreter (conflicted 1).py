@@ -20,26 +20,19 @@ fim:        HALT
 """
 
 variables = {
-    'CR': -1
 
 }
-
-
-labels = {}
 
 
 MNEMONICS = {
     "MOVE": lambda x, y: variables.update({x: y}),
     "CMP": lambda x, y: variables.update({"CR": variables[x] == int(y)}),
     "MULT": lambda x, y: variables.update({x: variables[x] * variables[y]}),
-    "SUBT": lambda x, y: variables.update({x: variables[x] - variables[y]}),
-    "JUMP": lambda x: labels[x] if labels.get(x) else -1,
-    "JTRUE": lambda x: labels[x] if variables['CR'] == 1 else -1,
-    "JFALSE": lambda x: labels[x] if variables['CR'] != 1 else -1,
 }
 
 def interpret(INPUT):
     lines = INPUT.split('\n')
+    labels = {}
     line_index = 0
 
     # map labels
@@ -66,20 +59,22 @@ def interpret(INPUT):
 
         # Call instruction
         instruction = line_splitted[0]
-        print("INST:", instruction)
 
         # jump
-        if instruction in ["JUMP", "JTRUE", "JFALSE"]:
+        if instruction == "JUMP":
             print("jump", line_index, labels[line_splitted[1]])
             exit(0)
             line_index = labels[line_splitted[1]]
             continue
 
         # 
+        print("MN", instruction)
         result = MNEMONICS[instruction](*line_splitted[1:])
         # if result is False:
         #     return False
         line_index += 1
+
+    return variables
 
 result = interpret(INPUT)
 print(result)
