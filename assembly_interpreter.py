@@ -28,21 +28,59 @@ variables = {
 labels = {}
 
 
+def filter_input(x):
+    value = variables.get(x)
+    if value:
+        return value
+    elif x.isnumeric():
+        astype = int
+        if  '.' in x:
+            astype = float
+        return astype(x)
+
+def move(x, y: str):
+    """Mneminic for MOVE"""
+    y_value = filter_input(y)
+    variables.update({x: y_value})
+
+def calc(x, y: str, op):
+    """Mneminic for MOVE"""
+    y_value = filter_input(y)
+    if not isinstance(y_value, (int, float)):
+        print("calc type is not number:", y, y_value, type(y_value))
+        exit(1)
+    if op == "MULT":
+        calc_result = variables[x] * y_value
+    elif op == "SUBT":
+        calc_result = variables[x] - y_value
+    else:
+        print("invalid operation")
+        exit(1)
+    variables.update({x: calc_result})
+
+def halt():
+    print(f"""
+Result:
+{variables}
+    """)
+
+
 MNEMONICS = {
-    "MOVE": lambda x, y: variables.update({x: y}),
+    "MOVE": move,
     "CMP": lambda x, y: variables.update({"CR": variables[x] == int(y)}),
-    "MULT": lambda x, y: variables.update({x: variables[x] * variables[y]}),
-    "SUBT": lambda x, y: variables.update({x: variables[x] - variables[y]}),
+    "MULT": lambda x,y: calc(x,y, "MULT"),
+    "SUBT": lambda x, y: calc(x,y, "SUBT"),
     "JUMP": lambda x: labels[x] if labels.get(x) else -1,
-    "JTRUE": lambda x: labels[x] if variables['CR'] == 1 else -1,
-    "JFALSE": lambda x: labels[x] if variables['CR'] != 1 else -1,
+    "JTRUE": lambda x: labels[x] if variables['CR'] == 1 else False,
+    "JFALSE": lambda x: labels[x] if variables['CR'] != 1 else False,
+    "HALT": halt,
 }
 
 def interpret(INPUT):
     lines = INPUT.split('\n')
-    line_index = 0
 
     # map labels
+    line_index = 0
     for l, line in enumerate(lines):
         line_splitted = line.replace(",", "").split("--")[0].split()
         if not line_splitted:
@@ -52,7 +90,9 @@ def interpret(INPUT):
             labels[line_splitted[0][:-1]] = l
             line_splitted = line_splitted[1:]
 
+
     # run code
+    line_index = 0
     while line_index < len(lines):
         line_splitted = lines[line_index].replace(",", "").split("--")[0].split()
         if not line_splitted:
@@ -66,19 +106,15 @@ def interpret(INPUT):
 
         # Call instruction
         instruction = line_splitted[0]
-        print("INST:", instruction)
 
         # jump
-        if instruction in ["JUMP", "JTRUE", "JFALSE"]:
-            print("jump", line_index, labels[line_splitted[1]])
-            exit(0)
-            line_index = labels[line_splitted[1]]
-            continue
-
-        # 
         result = MNEMONICS[instruction](*line_splitted[1:])
-        # if result is False:
-        #     return False
+        if instruction in ["JUMP", "JTRUE", "JFALSE"] and result is not False:
+            line_index = result
+            continue
+        if instruction == "HALT":
+            exit(0)
+
         line_index += 1
 
 result = interpret(INPUT)
