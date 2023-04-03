@@ -134,7 +134,6 @@ Labels:         {self.labels}\
         if _type == "2":
             print(chr(int(self.memory[int(address)])))
 
-
 MY_CODE = """\
     VAR     teste 3
     INT     1, 4
