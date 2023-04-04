@@ -3,7 +3,31 @@ Este interpretador emula um processador hipotético.
 
 Requisitos
     - CR armazena comparação
-    - O interpretador deve avisar erro léxico, sintático ou semântico"""
+    - O interpretador deve avisar erro léxico, sintático ou semântico
+"""
+
+class LexicalError(Exception):
+    "Raised when wrong characters are found"
+
+    def __init__(self, line_number, line_text, token):
+        self.line_number = line_number
+        self.line_text = line_text
+        self.token = token
+        message = f"'{token}' is not a valid token, at line {line_number}:\n{line_text}"
+        super().__init__(message)
+
+
+    def invalid_char(self, line:int=0, position:int=0):
+        "Message for invalid character"
+        str_position = f":{position}"
+        if position == -1:
+            str_position = ""
+        return f"Lexical error: invalid character at line {line}{str_position}"
+
+
+class SyntaxError1(Exception):
+    "Raised when the input value is less than 18"
+
 
 class MiniAssembler:
     "Class for simple Assembly compiler and runner"
@@ -13,6 +37,8 @@ class MiniAssembler:
         self.memory = [0] * 15 + [1.2]
         self.pc = 0
         self.instructions = []
+        self.mnemonics = ['MOVE', 'ADD', 'SUBT', 'JUMP', 'JTRUE', 'JFALSE',
+            'CMP', 'CMAIOR', 'CMENOR', 'MULT', 'DIV', 'VAR', 'INT']
 
     def __str__(self) -> str:
         return f"""\
@@ -52,6 +78,71 @@ Labels:         {self.labels}\
             else:
                 raise Exception(f'Unknown instruction: {instruction}')
             self.pc += 1
+
+    def check_lexical_errors(self, input_code:str):
+        """
+        Check for lexical errors in a given line of assembly code.
+
+        :param line: A string containing a line of assembly code.
+        :return: A list of lexical errors found in the line, or an empty list if no errors were found.
+        """
+        errors = []
+
+        # Check for invalid characters
+        for i, line in enumerate(input_code.splitlines()):
+            line_1 = line.split("--")[0].split()
+            if not line_1:
+                continue
+
+            if not line[0].isalpha():
+                raise LexicalError(i, line, line[0])
+
+            # label/mnemonic
+            is_label = line_1[0][-1] == ':'
+            if is_label:
+                label = line_1[0][:-1]
+                for char in label:
+                    if not char.isalnum():
+                        raise LexicalError(i, line, char)
+            else:
+                mnemonic = line_1[0]
+                for char in mnemonic:
+                    if not char.isalnum() and not char in "_":
+                        raise LexicalError(i, mnemonic, char)
+
+                # args
+                for i in line[1:]:
+                    pass
+
+        return errors
+
+    def check_syntactic_errors(self, line):
+        """
+        Check for syntactic errors in a given line of assembly code.
+
+        :param line: A string containing a line of assembly code.
+        :return: A list of syntactic errors found in the line, or an empty list if no errors were found.
+        """
+        errors = []
+        # Split the line into its components
+        label, sep, rest = line.partition(':')
+        mnemonic, sep, operands = rest.lstrip().partition(' ')
+        operands = operands.split(',')
+        
+        # Check for invalid label
+        if label and not label.isalnum():
+            errors.append('Invalid label')
+        
+        # Check for invalid mnemonic
+        if mnemonic not in self.mnemonics:
+            errors.append('Invalid mnemonic')
+        
+        # Check for invalid number of operands
+        if mnemonic in ['MOVE', 'ADD', 'SUBT', 'MULT', 'DIV'] and len(operands) != 2:
+            errors.append('Invalid number of operands')
+        
+        return errors
+
 
     def operator_is_register(self, src):
         "If operator is register"
@@ -170,8 +261,9 @@ fim:        HALT
 """
 
 assembler = MiniAssembler()
-assembler.load(MY_CODE)
-print(assembler.registers)
-assembler.run()
+assembler.check_lexical_errors("VAR     teste 3 --s dggsgdfdgf")
+# assembler.load(MY_CODE)
+# print(assembler.registers)
+# assembler.run()
 # print(assembler)
-print(assembler.registers) # {'A': 12, 'B': 10}
+# print(assembler.registers) # {'A': 12, 'B': 10}
