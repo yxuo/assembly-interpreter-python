@@ -24,6 +24,7 @@ Labels:         {self.labels}\
         """
 
     def load(self, code):
+        "Load instructions to compiler"
         self.instructions = []
         self.labels = {}
         for i, line in enumerate(code.split('\n')):
@@ -39,6 +40,7 @@ Labels:         {self.labels}\
             self.instructions.append(line)
 
     def run(self):
+        "Run code"
         while self.pc < len(self.instructions):
             instruction = self.instructions[self.pc]
             operation, *args = instruction.split()
@@ -52,16 +54,19 @@ Labels:         {self.labels}\
             self.pc += 1
 
     def operator_is_register(self, src):
+        "If operator is register"
         return src in self.registers
 
     def operator_is_label(self, src):
+        "If operator is label"
         return src in self.labels and self.labels[src] in self.memory
 
     def operator_is_value(self, src):
+        "If operator is value"
         return not self.operator_is_register(src) and not self.operator_is_label(src)
 
     def get_operator(self, src):
-        "Given source, get operator's value from registers or labels"
+        "Get operator value based on register or pointer"
         # register
         if self.operator_is_register(src):
             return self.registers[src]
@@ -78,6 +83,7 @@ Labels:         {self.labels}\
             return src
 
     def set_operator(self, value, reference:str):
+        "Set operator value based on register or pointer"
         if reference[:0]+reference[:1] == "[]":
             label = self.labels[reference[1:-1]]
             self.memory[label] = value
@@ -85,48 +91,61 @@ Labels:         {self.labels}\
             self.registers[reference] = value
 
     def move(self, dst, src):
+        "Create or update value to variable"
         src_value = self.get_operator(src)
         self.set_operator(src_value, dst)
 
     def add(self, dst, src):
+        "Add number to register"
         self.set_operator(self.get_operator(dst) + self.get_operator(src), dst)
 
     def subt(self, dst, src):
+        "Subtract number to register"
         self.set_operator(self.get_operator(dst) - self.get_operator(src), dst)
 
     def mult(self, dst, src):
+        "Multiply number to register"
         self.set_operator(self.get_operator(dst) * self.get_operator(src), dst)
 
     def div(self, dst, src):
+        "Divide number to register. "
         self.set_operator(self.get_operator(dst) / self.get_operator(src), dst)
 
     def jump(self, dst:str):
+        "Jump to label or line number"
         if dst.isnumeric():
             self.pc = int(dst) - 1
         else:
             self.pc = self.labels[dst] - 1
 
     def jtrue(self, dst):
+        "Jump to label or line number if CMP is true"
         if self.registers['CP'] == 1:
             self.jump(dst)
 
     def jfalse(self, dst):
+        "Jump to label or line number if CMP is false"
         if self.registers['CP'] == 0:
             self.jump(dst)
 
     def cmp(self, op1, op2):
+        "Compare values and save result in CP"
         self.registers['CP'] = int(self.get_operator(op1) == self.get_operator(op2))
 
     def cmaior(self, op1, op2):
+        "Check if the first value is greater than the second value."
         self.registers['CP'] = int(self.get_operator(op1) > self.get_operator(op2))
 
     def cmenor(self, op1, op2):
+        "Check if the first value is lower than the second value."
         self.registers['CP'] = int(self.get_operator(op1) < self.get_operator(op2))
 
     def var(self, label, address):
+        "Associates a label to a memory address"
         self.labels[label] = int(address)
 
     def int(self, _type, address:str):
+        "Read/write ascii character from memory address"
         if not address.isnumeric():
             return
         if _type == "1":
