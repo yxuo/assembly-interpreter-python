@@ -9,20 +9,16 @@ Requisitos
 class LexicalError(Exception):
     "Raised when wrong characters are found"
 
-    def __init__(self, line_number, line_text, token):
-        self.line_number = line_number
-        self.line_text = line_text
-        self.token = token
-        message = f"'{token}' is not a valid token, at line {line_number}:\n{line_text}"
+    DEFAULT_MESSAGES = {
+        "invalid_token": lambda l,n,p,t: f"'{t}' is not a valid token, at line {n}:{p}\n{l}",
+        "expected_token": lambda l,n,p,t: f"expected token '{t}' at line {n}:{p}\n{l}",
+    }
+
+    def __init__(self, **kwargs):
+        args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token_pos", "token")]
+        error_type = kwargs.get("error_type", "invalid_token")
+        message = self.DEFAULT_MESSAGES[error_type](*args)
         super().__init__(message)
-
-
-    def invalid_char(self, line:int=0, position:int=0):
-        "Message for invalid character"
-        str_position = f":{position}"
-        if position == -1:
-            str_position = ""
-        return f"Lexical error: invalid character at line {line}{str_position}"
 
 
 class SyntaxError1(Exception):
@@ -109,17 +105,26 @@ Labels:         {self.labels}\
             # mnemonic
             else:
                 mnemonic = line_1[chunk]
-                for char in mnemonic:
-                    if not (char.isalnum() or char in "_"):
-                        raise LexicalError(i, mnemonic, char)
+                self.check_lexical_variable_name(mnemonic, i, line)
                 chunk += 1
 
                 # args
-                for char in line[chunk:]:
-                    if not (char.isalnum() or char in "_"):
-                        raise LexicalError(i, mnemonic, char)
+                for arg in line_1[chunk:]:
+                    if arg[:0]+arg[:1] == "[]":
+                        arg = arg[1:-1]
+                    if arg[-1] == ',':
+                        arg = arg[:-1]
+                    self.check_lexical_variable_name(arg, i, line)
 
         return errors
+
+    def check_lexical_variable_name(self, variable_name:str, line_number, line:str):
+        "Validate lexical variable name"
+        if variable_name[0].isnumeric() and not variable_name.isnumeric():
+            raise LexicalError(line_number, line, variable_name[0])
+        for char in variable_name:
+            if not (char.isalnum() or char in "_"):
+                raise LexicalError(line_number, line, char)
 
     def check_syntactic_errors(self, line):
         """
@@ -133,19 +138,19 @@ Labels:         {self.labels}\
         label, sep, rest = line.partition(':')
         mnemonic, sep, operands = rest.lstrip().partition(' ')
         operands = operands.split(',')
-        
+
         # Check for invalid label
         if label and not label.isalnum():
             errors.append('Invalid label')
-        
+
         # Check for invalid mnemonic
         if mnemonic not in self.mnemonics:
             errors.append('Invalid mnemonic')
-        
+
         # Check for invalid number of operands
         if mnemonic in ['MOVE', 'ADD', 'SUBT', 'MULT', 'DIV'] and len(operands) != 2:
             errors.append('Invalid number of operands')
-        
+
         return errors
 
 
@@ -266,7 +271,7 @@ fim:        HALT
 """
 
 assembler = MiniAssembler()
-assembler.check_lexical_errors("VAR     teste 3 --s dggsgdfdgf")
+assembler.check_lexical_errors("VAR     teste, 3 --s dggsgdfdgf")
 # assembler.load(MY_CODE)
 # print(assembler.registers)
 # assembler.run()
