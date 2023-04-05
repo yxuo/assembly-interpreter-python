@@ -7,15 +7,20 @@ Requisitos
 """
 
 class LexicalError(Exception):
-    "Raised when wrong characters are found"
-
+    """
+    Raised when wrong characters are found
+    kwargs:
+        line:str, line_number:int, token_pos:int, token:Str
+    """
     DEFAULT_MESSAGES = {
-        "invalid_token": lambda l,n,p,t: f"'{t}' is not a valid token, at line {n}:{p}\n{l}",
-        "expected_token": lambda l,n,p,t: f"expected token '{t}' at line {n}:{p}\n{l}",
+        "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
+        "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
+        "invalid_mnemonic": lambda l,n,t: f"invalid mnemonic name '{t}' at line {n}\n{l}",
     }
 
-    def __init__(self, **kwargs):
-        args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token_pos", "token")]
+    def __init__(self, *args, **kwargs):
+        if not args:
+            args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token")]
         error_type = kwargs.get("error_type", "invalid_token")
         message = self.DEFAULT_MESSAGES[error_type](*args)
         super().__init__(message)
@@ -68,8 +73,7 @@ Labels:         {self.labels}\
             operation, *args = instruction.split()
             if operation == "HALT":
                 return
-            if operation in ["MOVE","ADD","SUBT","JUMP","JTRUE","JFALSE","CMP","CMAIOR", "CMENOR",
-                "MULT", "DIV", "VAR", "INT"]:
+            if operation in self.mnemonics:
                 getattr(self, operation.lower())(*[i.strip(',') for i in args])
             else:
                 raise Exception(f'Unknown instruction: {instruction}')
@@ -91,7 +95,7 @@ Labels:         {self.labels}\
                 continue
 
             if not line[0].isalpha():
-                raise LexicalError(i, line, line[0])
+                raise LexicalError(line, i, line[0])
 
             chunk = 0
             # label
@@ -100,19 +104,27 @@ Labels:         {self.labels}\
                 label = line_1[chunk][:-1]
                 for char in label:
                     if not char.isalnum():
-                        raise LexicalError(i, line, char)
+                        raise LexicalError(line, i, char)
                 chunk += 1
             # mnemonic
             else:
                 mnemonic = line_1[chunk]
+
+                if mnemonic not in self.mnemonics:
+                    raise LexicalError(line, i, mnemonic, error_type="invalid_mnemonic")
+
                 self.check_lexical_variable_name(mnemonic, i, line)
                 chunk += 1
 
                 # args
-                for arg in line_1[chunk:]:
+                args = line_1[chunk:]
+                for j, arg in enumerate(args):
                     if arg[:0]+arg[:1] == "[]":
                         arg = arg[1:-1]
-                    if arg[-1] == ',':
+                    # TODO: add to syntatic error
+                    # if arg[-1] == ',':
+                    #     if j == len(args)-1:
+                    #         raise LexicalError(line, i, ',', error_type="expected_token")
                         arg = arg[:-1]
                     self.check_lexical_variable_name(arg, i, line)
 
@@ -121,10 +133,10 @@ Labels:         {self.labels}\
     def check_lexical_variable_name(self, variable_name:str, line_number, line:str):
         "Validate lexical variable name"
         if variable_name[0].isnumeric() and not variable_name.isnumeric():
-            raise LexicalError(line_number, line, variable_name[0])
+            raise LexicalError(line, line_number, variable_name[0])
         for char in variable_name:
             if not (char.isalnum() or char in "_"):
-                raise LexicalError(line_number, line, char)
+                raise LexicalError(line, line_number, char)
 
     def check_syntactic_errors(self, line):
         """
@@ -271,7 +283,7 @@ fim:        HALT
 """
 
 assembler = MiniAssembler()
-assembler.check_lexical_errors("VAR     teste, 3 --s dggsgdfdgf")
+assembler.check_lexical_errors("VAR     test 3 --s dggsgdfdgf")
 # assembler.load(MY_CODE)
 # print(assembler.registers)
 # assembler.run()
