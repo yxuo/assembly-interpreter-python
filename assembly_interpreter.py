@@ -97,22 +97,27 @@ Labels:         {self.labels}\
             if not line[0].isalpha():
                 raise LexicalError(i, line, line[0])
 
-            # label/mnemonic
-            is_label = line_1[0][-1] == ':'
+            chunk = 0
+            # label
+            is_label = line_1[chunk][-1] == ':'
             if is_label:
-                label = line_1[0][:-1]
+                label = line_1[chunk][:-1]
                 for char in label:
                     if not char.isalnum():
                         raise LexicalError(i, line, char)
+                chunk += 1
+            # mnemonic
             else:
-                mnemonic = line_1[0]
+                mnemonic = line_1[chunk]
                 for char in mnemonic:
-                    if not char.isalnum() and not char in "_":
+                    if not (char.isalnum() or char in "_"):
                         raise LexicalError(i, mnemonic, char)
+                chunk += 1
 
                 # args
-                for i in line[1:]:
-                    pass
+                for char in line[chunk:]:
+                    if not (char.isalnum() or char in "_"):
+                        raise LexicalError(i, mnemonic, char)
 
         return errors
 
