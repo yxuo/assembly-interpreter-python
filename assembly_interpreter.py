@@ -25,21 +25,28 @@ class LexicalError(Exception):
         message = self.DEFAULT_MESSAGES[error_type](*args)
         super().__init__(message)
 
-
 class SyntaxError1(Exception):
-    "Raised when the input value is less than 18"
+    """
+    Raised when wrong characters are found
+    kwargs:
+        line:str, line_number:int, token_pos:int, token:Str
+    """
+    DEFAULT_MESSAGES = {
+        "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
+        "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
+        "invalid_mnemonic": lambda l,n,t: f"invalid mnemonic name '{t}' at line {n}\n{l}",
+    }
+
+    def __init__(self, *args, **kwargs):
+        if not args:
+            args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token")]
+        error_type = kwargs.get("error_type", "invalid_token")
+        message = self.DEFAULT_MESSAGES[error_type](*args)
+        super().__init__(message)
 
 
 class MiniAssembler:
     "Class for simple Assembly compiler and runner"
-    def __init__(self):
-        self.registers = {'CP': 0}
-        self.labels = {}
-        self.memory = [0] * 15 + [1.2]
-        self.pc = 0
-        self.instructions = []
-        self.mnemonics = ['MOVE', 'ADD', 'SUBT', 'JUMP', 'JTRUE', 'JFALSE',
-            'CMP', 'CMAIOR', 'CMENOR', 'MULT', 'DIV', 'VAR', 'INT']
 
     def __str__(self) -> str:
         return f"""\
@@ -50,21 +57,48 @@ PC:             {self.pc}
 Labels:         {self.labels}\
         """
 
+    def __init__(self):
+        self.registers = {'CP': 0}
+        self.labels = {}
+        self.memory = [0] * 15 + [1.2]
+        self.pc = 0
+        self.instructions = []
+        self.mnemonics = ['MOVE', 'ADD', 'SUBT', 'JUMP', 'JTRUE', 'JFALSE',
+            'CMP', 'CMAIOR', 'CMENOR', 'MULT', 'DIV', 'VAR', 'INT']
+
     def load(self, code):
         "Load instructions to compiler"
         self.instructions = []
         self.labels = {}
         for i, line in enumerate(code.split('\n')):
-            line = line.split("--")[0].strip()
-            if not line:
+            line_1 = line.split("--")[0].strip()
+            if not line_1:
                 continue
-            if ':' in line:
-                label, line = line.split(':', 1)
+            if ':' in line_1:
+                label, line_1 = line_1.split(':', 1)
                 label = label.strip()
                 if label in self.labels:
                     raise ValueError(f"Duplicate label '{label}' on line {i+1}")
                 self.labels[label] = len(self.instructions)
-            self.instructions.append(line)
+            self.instructions.append(line_1)
+
+    def validate(self, code):
+        "Load instructions to compiler"
+        self.instructions = []
+        self.labels = {}
+        for i, line in enumerate(code.split('\n')):
+            line_1 = line.split("--")[0].strip()
+            if not line_1:
+                continue
+            self.check_lexical_errors(line, i)
+
+            if ':' in line_1:
+                label, line_1 = line_1.split(':', 1)
+                label = label.strip()
+                if label in self.labels:
+                    raise ValueError(f"Duplicate label '{label}' on line {i+1}")
+                self.labels[label] = len(self.instructions)
+            self.instructions.append(line_1)
 
     def run(self):
         "Run code"
@@ -79,7 +113,7 @@ Labels:         {self.labels}\
                 raise Exception(f'Unknown instruction: {instruction}')
             self.pc += 1
 
-    def check_lexical_errors(self, input_code:str):
+    def check_lexical_errors(self, line:str, line_index):
         """
         Check for lexical errors in a given line of assembly code.
 
@@ -89,54 +123,119 @@ Labels:         {self.labels}\
         errors = []
 
         # Check for invalid characters
-        for i, line in enumerate(input_code.splitlines()):
-            line_1 = line.split("--")[0].split()
-            if not line_1:
-                continue
+        line = line.strip()
+        line_1 = line.split("--")[0].split()
+        print(line_1)
+        if not line_1:
+            return
 
-            if not line[0].isalpha():
-                raise LexicalError(line, i, line[0])
+        if not line[0].isalpha():
+            raise LexicalError(line, line_index, line[0])
 
-            chunk = 0
-            # label
-            is_label = line_1[chunk][-1] == ':'
-            if is_label:
-                label = line_1[chunk][:-1]
-                for char in label:
-                    if not char.isalnum():
-                        raise LexicalError(line, i, char)
-                chunk += 1
-            # mnemonic
-            else:
-                mnemonic = line_1[chunk]
+        chunk = 0
+        # label
+        is_label = line_1[chunk][-1] == ':'
+        if is_label:
+            label = line_1[chunk][:-1]
+            for char in label:
+                if not char.isalnum():
+                    raise LexicalError(line, line_index, char)
+            chunk += 1
+        # mnemonic
+        else:
+            mnemonic = line_1[chunk]
 
-                if mnemonic not in self.mnemonics:
-                    raise LexicalError(line, i, mnemonic, error_type="invalid_mnemonic")
+            self.validate_variable_name(mnemonic, line_index, line)
+            chunk += 1
 
-                self.check_lexical_variable_name(mnemonic, i, line)
-                chunk += 1
-
-                # args
-                args = line_1[chunk:]
-                for j, arg in enumerate(args):
-                    if arg[:0]+arg[:1] == "[]":
-                        arg = arg[1:-1]
-                    # TODO: add to syntatic error
-                    # if arg[-1] == ',':
-                    #     if j == len(args)-1:
-                    #         raise LexicalError(line, i, ',', error_type="expected_token")
-                        arg = arg[:-1]
-                    self.check_lexical_variable_name(arg, i, line)
+            # args
+            args = line_1[chunk:]
+            for j, arg in enumerate(args):
+                if arg[:0]+arg[:1] == "[]":
+                    arg = arg[1:-1]
+                # TODO: add to syntatic error
+                # if arg[-1] == ',':
+                #     if j == len(args)-1:
+                #         raise LexicalError(line, i, ',', error_type="expected_token")
+                    arg = arg[:-1]
+                self.validate_variable_name(arg, line_index, line)
 
         return errors
 
-    def check_lexical_variable_name(self, variable_name:str, line_number, line:str):
+    def validate_arg(self, arg, line, line_index):
+        "Validate [var], register or literal"
+        if arg[:0] == '[':
+            if arg[:1] == ']':
+                arg = arg[1:-1]
+            else:
+                raise LexicalError(line, line_index, arg[-1:])
+
+        if variable_name[0].isnumeric() and not variable_name.isnumeric():
+            raise LexicalError(line, line_number, variable_name[0])
+        for char in variable_name:
+            if not (char.isalnum() or char in "_"):
+                raise LexicalError(line, line_number, char)
+
+
+    def validate_variable_name(self, variable_name:str, line_number, line:str):
         "Validate lexical variable name"
         if variable_name[0].isnumeric() and not variable_name.isnumeric():
             raise LexicalError(line, line_number, variable_name[0])
         for char in variable_name:
             if not (char.isalnum() or char in "_"):
                 raise LexicalError(line, line_number, char)
+
+    def check_syntax_errors(self, line:str, line_index):
+        """
+        Check for lexical errors in a given line of assembly code.
+
+        :param line: A string containing a line of assembly code.
+        :return: A list of lexical errors found in the line,\
+            or an empty list if no errors were found.
+        """
+        errors = []
+
+        # Check for invalid characters
+        line_1 = line.split("--")[0].split()
+        if not line_1:
+            return
+
+        if not line[0].isalpha():
+            raise LexicalError(line, line_index, line[0])
+
+        chunk = 0
+        # label
+        is_label = line_1[chunk][-1] == ':'
+        if is_label:
+            label = line_1[chunk][:-1]
+            for char in label:
+                if not char.isalnum():
+                    raise LexicalError(line, line_index, char)
+            chunk += 1
+        # mnemonic
+        else:
+            mnemonic = line_1[chunk]
+
+            # invalid mnemonic
+            if mnemonic not in self.mnemonics:
+                raise SyntaxError1(line, line_index, mnemonic, error_type="invalid_mnemonic")
+
+            self.validate_variable_name(mnemonic, line_index, line)
+            chunk += 1
+
+            # args
+            args = line_1[chunk:]
+            for j, arg in enumerate(args):
+                if arg[:0]+arg[:1] == "[]":
+                    arg = arg[1:-1]
+                # TODO: add to syntatic error
+                # if arg[-1] == ',':
+                #     if j == len(args)-1:
+                #         raise LexicalError(line, i, ',', error_type="expected_token")
+                    arg = arg[:-1]
+                self.validate_variable_name(arg, line_index, line)
+
+        return errors
 
     def check_syntactic_errors(self, line):
         """
@@ -283,7 +382,7 @@ fim:        HALT
 """
 
 assembler = MiniAssembler()
-assembler.check_lexical_errors("VAR     test 3 --s dggsgdfdgf")
+assembler.validate(MY_CODE)
 # assembler.load(MY_CODE)
 # print(assembler.registers)
 # assembler.run()
