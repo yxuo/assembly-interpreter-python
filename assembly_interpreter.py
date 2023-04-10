@@ -4,7 +4,15 @@ Este interpretador emula um processador hipotético.
 Requisitos
     - CR armazena comparação
     - O interpretador deve avisar erro léxico, sintático ou semântico
+
+Fonte:
+    - https://www.javatpoint.com/lexical-error
+    - https://www.javatpoint.com/syntax-error
+    - https://www.javatpoint.com/semantic-error
 """
+
+import inspect
+import re
 
 class LexicalError(Exception):
     """
@@ -45,6 +53,13 @@ class SyntaxError1(Exception):
         super().__init__(message)
 
 
+def _mnemonic(**mnemonic):
+    "Decorador for mnemonics in MiniAssembler"
+    def decorator(func):
+        func.mnemonic = mnemonic
+        return func
+    return decorator
+
 class MiniAssembler:
     "Class for simple Assembly compiler and runner"
 
@@ -57,14 +72,22 @@ PC:             {self.pc}
 Labels:         {self.labels}\
         """
 
+    ERROR_MESSAGES = {
+        "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
+        "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
+        "operator_not_found": lambda l,n,t: f"operator name not found '{t}' at line {n}\n{l}",
+        "duplicated_token": lambda l,n,t: \
+            f"token '{t}' duplicated at line {n}\n{l}",
+        "expected_closing": lambda l,n,t: \
+            f"expected closing '{t}' at line {n}\n{l}",
+    }
+
     def __init__(self):
         self.registers = {'CP': 0}
         self.labels = {}
         self.memory = [0] * 15 + [1.2]
         self.pc = 0
         self.instructions = []
-        self.mnemonics = ['MOVE', 'ADD', 'SUBT', 'JUMP', 'JTRUE', 'JFALSE',
-            'CMP', 'CMAIOR', 'CMENOR', 'MULT', 'DIV', 'VAR', 'INT']
 
     def load(self, code):
         "Load instructions to compiler"
@@ -107,83 +130,40 @@ Labels:         {self.labels}\
             operation, *args = instruction.split()
             if operation == "HALT":
                 return
-            if operation in self.mnemonics:
+            if operation in self.get_mnemonics():
                 getattr(self, operation.lower())(*[i.strip(',') for i in args])
             else:
                 raise Exception(f'Unknown instruction: {instruction}')
             self.pc += 1
 
     def check_lexical_errors(self, line:str, line_index):
-        """
-        Check for lexical errors in a given line of assembly code.
-
-        :param line: A string containing a line of assembly code.
-        :return: A list of lexical errors found in the line, or an empty list if no errors were found.
-        """
-        errors = []
+        "Check for lexical errors in a given line of assembly code"
 
         # Check for invalid characters
         line = line.strip()
         line_1 = line.split("--")[0].split()
-        print(line_1)
         if not line_1:
-            return
-
+            returns
         if not line[0].isalpha():
-            raise LexicalError(line, line_index, line[0])
+            raise NameError(self.ERROR_MESSAGES["invalid_token"](line, line_index, line[0]))
 
-        chunk = 0
-        # label
-        is_label = line_1[chunk][-1] == ':'
-        if is_label:
-            label = line_1[chunk][:-1]
-            for char in label:
-                if not char.isalnum():
-                    raise LexicalError(line, line_index, char)
-            chunk += 1
-        # mnemonic
-        else:
-            mnemonic = line_1[chunk]
+        # For each token, lexic check
+        for token in line_1:
+            self.validate_token_lexic(token, line_index, line)
 
-            self.validate_variable_name(mnemonic, line_index, line)
-            chunk += 1
-
-            # args
-            args = line_1[chunk:]
-            for j, arg in enumerate(args):
-                if arg[:0]+arg[:1] == "[]":
-                    arg = arg[1:-1]
-                # TODO: add to syntatic error
-                # if arg[-1] == ',':
-                #     if j == len(args)-1:
-                #         raise LexicalError(line, i, ',', error_type="expected_token")
-                    arg = arg[:-1]
-                self.validate_variable_name(arg, line_index, line)
-
-        return errors
-
-    def validate_arg(self, arg, line, line_index):
-        "Validate [var], register or literal"
-        if arg[:0] == '[':
-            if arg[:1] == ']':
-                arg = arg[1:-1]
-            else:
-                raise LexicalError(line, line_index, arg[-1:])
-
-        if variable_name[0].isnumeric() and not variable_name.isnumeric():
-            raise LexicalError(line, line_number, variable_name[0])
-        for char in variable_name:
+    def validate_token_lexic(self, token:str, line_number, line:str):
+        "Validate token name"
+        if token[-1] == ',':
+            token = token[:-1]
+        if token[-1] == ':':
+            token = token[:-1]
+        if token[0].isnumeric() and not token.isnumeric():
+            print(token)
+            raise NameError(self.ERROR_MESSAGES["invalid_token"](
+                line, line_number, token[0]))
+        for char in token:
             if not (char.isalnum() or char in "_"):
-                raise LexicalError(line, line_number, char)
-
-
-    def validate_variable_name(self, variable_name:str, line_number, line:str):
-        "Validate lexical variable name"
-        if variable_name[0].isnumeric() and not variable_name.isnumeric():
-            raise LexicalError(line, line_number, variable_name[0])
-        for char in variable_name:
-            if not (char.isalnum() or char in "_"):
-                raise LexicalError(line, line_number, char)
+                raise NameError(self.ERROR_MESSAGES["invalid_token"](line, line_number, char))
 
     def check_syntax_errors(self, line:str, line_index):
         """
@@ -193,51 +173,33 @@ Labels:         {self.labels}\
         :return: A list of lexical errors found in the line,\
             or an empty list if no errors were found.
         """
+
         errors = []
+        chunk = 0
 
         # Check for invalid characters
-        line_1 = line.split("--")[0].split()
-        if not line_1:
+        line = line.strip()  # Ignore spaces
+        line_treated = line.split("--")[0].split()  # Ignore comment
+        line_treated = re.sub(r'"[^"]*"', '', line_treated)  # Ignore quoted string
+        if not line_treated:
             return
 
-        if not line[0].isalpha():
-            raise LexicalError(line, line_index, line[0])
+        # string
+        if line_treated.count('"'):
+            raise SyntaxError(self.ERROR_MESSAGES["expected_closing"](line, line_index, ':'))
 
-        chunk = 0
         # label
-        is_label = line_1[chunk][-1] == ':'
-        if is_label:
-            label = line_1[chunk][:-1]
-            for char in label:
-                if not char.isalnum():
-                    raise LexicalError(line, line_index, char)
-            chunk += 1
-        # mnemonic
-        else:
-            mnemonic = line_1[chunk]
+        if line.count(':') > 1:
+            raise SyntaxError(self.ERROR_MESSAGES["duplicated_token"](line, line_index, ':'))
 
-            # invalid mnemonic
-            if mnemonic not in self.mnemonics:
-                raise SyntaxError1(line, line_index, mnemonic, error_type="invalid_mnemonic")
+    def validate_operator_semantic(self, opr, line, line_index):
+        "Validate register, [pointer], or literal"
 
-            self.validate_variable_name(mnemonic, line_index, line)
-            chunk += 1
+        if self.operator_is_label(opr) and self.operator_is_register(opr):
+            raise SyntaxError(self.ERROR_MESSAGES["duplicated_operator"](
+                line, line_index, opr[-1:]))
 
-            # args
-            args = line_1[chunk:]
-            for j, arg in enumerate(args):
-                if arg[:0]+arg[:1] == "[]":
-                    arg = arg[1:-1]
-                # TODO: add to syntatic error
-                # if arg[-1] == ',':
-                #     if j == len(args)-1:
-                #         raise LexicalError(line, i, ',', error_type="expected_token")
-                    arg = arg[:-1]
-                self.validate_variable_name(arg, line_index, line)
-
-        return errors
-
-    def check_syntactic_errors(self, line):
+    def check_semantic_errors(self, line):
         """
         Check for syntactic errors in a given line of assembly code.
 
@@ -255,7 +217,7 @@ Labels:         {self.labels}\
             errors.append('Invalid label')
 
         # Check for invalid mnemonic
-        if mnemonic not in self.mnemonics:
+        if mnemonic not in self.get_mnemonics():
             errors.append('Invalid mnemonic')
 
         # Check for invalid number of operands
@@ -264,14 +226,13 @@ Labels:         {self.labels}\
 
         return errors
 
-
     def operator_is_register(self, src):
         "If operator is register"
         return src in self.registers
 
     def operator_is_label(self, src):
         "If operator is label"
-        return src in self.labels and self.labels[src] in self.memory
+        return src in self.labels
 
     def operator_is_value(self, src):
         "If operator is value"
@@ -302,27 +263,38 @@ Labels:         {self.labels}\
         else:
             self.registers[reference] = value
 
+    def get_mnemonics(self):
+        "Return a list of mnemonic names"
+        return {method.upper(): getattr(self, method).mnemonic for method in dir(self)
+            if callable(getattr(self, method)) and hasattr(getattr(self, method), 'mnemonic')}
+
+    @_mnemonic(param_type=[["reg", "label"], ["reg", "label", "literal"]])
     def move(self, dst, src):
         "Create or update value to variable"
         src_value = self.get_operator(src)
         self.set_operator(src_value, dst)
 
+    @_mnemonic(param_type=[["reg", "label"], ["reg", "label", "literal"]])
     def add(self, dst, src):
         "Add number to register"
         self.set_operator(self.get_operator(dst) + self.get_operator(src), dst)
 
+    @_mnemonic(param_type=[["reg", "label"], ["reg", "label", "literal"]])
     def subt(self, dst, src):
         "Subtract number to register"
         self.set_operator(self.get_operator(dst) - self.get_operator(src), dst)
 
+    @_mnemonic(param_type=[["reg", "label"], ["reg", "label", "literal"]])
     def mult(self, dst, src):
         "Multiply number to register"
         self.set_operator(self.get_operator(dst) * self.get_operator(src), dst)
 
+    @_mnemonic(param_type=[["reg", "label"], ["reg", "label", "literal"]])
     def div(self, dst, src):
         "Divide number to register. "
         self.set_operator(self.get_operator(dst) / self.get_operator(src), dst)
 
+    @_mnemonic(param_type=[["literal", "label"]])
     def jump(self, dst:str):
         "Jump to label or line number"
         if dst.isnumeric():
@@ -330,32 +302,39 @@ Labels:         {self.labels}\
         else:
             self.pc = self.labels[dst] - 1
 
+    @_mnemonic(param_type=[["literal", "label"]])
     def jtrue(self, dst):
         "Jump to label or line number if CMP is true"
         if self.registers['CP'] == 1:
             self.jump(dst)
 
+    @_mnemonic(param_type=[["literal", "label"]])
     def jfalse(self, dst):
         "Jump to label or line number if CMP is false"
         if self.registers['CP'] == 0:
             self.jump(dst)
 
+    @_mnemonic(param_type=[["reg", "label", "literal"], ["reg", "label", "literal"]])
     def cmp(self, op1, op2):
         "Compare values and save result in CP"
         self.registers['CP'] = int(self.get_operator(op1) == self.get_operator(op2))
 
+    @_mnemonic(param_type=[["reg", "label", "literal"], ["reg", "label", "literal"]])
     def cmaior(self, op1, op2):
         "Check if the first value is greater than the second value."
         self.registers['CP'] = int(self.get_operator(op1) > self.get_operator(op2))
 
+    @_mnemonic(param_type=[["reg", "label", "literal"], ["reg", "label", "literal"]])
     def cmenor(self, op1, op2):
         "Check if the first value is lower than the second value."
         self.registers['CP'] = int(self.get_operator(op1) < self.get_operator(op2))
 
+    @_mnemonic(param_type=[["label"], ["addr"]])
     def var(self, label, address):
         "Associates a label to a memory address"
         self.labels[label] = int(address)
 
+    @_mnemonic(param_type=[["addr"]])
     def int(self, _type, address:str):
         "Read/write ascii character from memory address"
         if not address.isnumeric():
@@ -387,4 +366,4 @@ assembler.validate(MY_CODE)
 # print(assembler.registers)
 # assembler.run()
 # print(assembler)
-# print(assembler.registers) # {'A': 12, 'B': 10}
+# print(assembler.registers) # {'A': 12, 'B
