@@ -15,45 +15,38 @@ import inspect
 import re
 
 class LexicalError(Exception):
-    """
-    Raised when wrong characters are found
-    kwargs:
-        line:str, line_number:int, token_pos:int, token:Str
-    """
-    DEFAULT_MESSAGES = {
-        "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
-        "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
-        "invalid_mnemonic": lambda l,n,t: f"invalid mnemonic name '{t}' at line {n}\n{l}",
-    }
+    "To represent lexical errors"
 
-    def __init__(self, *args, **kwargs):
-        if not args:
-            args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token")]
-        error_type = kwargs.get("error_type", "invalid_token")
-        message = self.DEFAULT_MESSAGES[error_type](*args)
-        super().__init__(message)
+def universe(function):
 
-class SyntaxError1(Exception):
-    """
-    Raised when wrong characters are found
-    kwargs:
-        line:str, line_number:int, token_pos:int, token:Str
-    """
-    DEFAULT_MESSAGES = {
-        "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
-        "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
-        "invalid_mnemonic": lambda l,n,t: f"invalid mnemonic name '{t}' at line {n}\n{l}",
-    }
+    def function_wrapper():
+        return function()
 
-    def __init__(self, *args, **kwargs):
-        if not args:
-            args = [kwargs.get(k,None) for k,_ in ("line", "line_number", "token")]
-        error_type = kwargs.get("error_type", "invalid_token")
-        message = self.DEFAULT_MESSAGES[error_type](*args)
-        super().__init__(message)
+    function_wrapper.a = 1
+    function_wrapper.__doc__ = "doc2"
+    function_wrapper.__name__ = function.__name__
+    
+    return function_wrapper
 
+def _mnemonic(*args, **kwargs):
+    "Mnemonic metadata for MiniAssembler"
 
-def _mnemonic(**mnemonic):
+    # @decorator()
+    def decorator(func):
+        data = {"param_type": []}
+        if kwargs:
+            data = kwargs
+        func.mnemonic = data
+        return func
+
+    # @decorator
+    if args:
+        function = decorator(args[0])
+        return function
+
+    return decorator
+
+def _mnemonic1(mnemonic):
     "Decorador for mnemonics in MiniAssembler"
     def decorator(func):
         func.mnemonic = mnemonic
@@ -73,6 +66,7 @@ Labels:         {self.labels}\
         """
 
     ERROR_MESSAGES = {
+        "invalid_mnemonic": lambda l,n,t: f"'{t}' is not a valid mnemonic, at line {n}\n{l}",
         "invalid_token": lambda l,n,t: f"'{t}' is not a valid token, at line {n}\n{l}",
         "expected_token": lambda l,n,t: f"expected token after '{t}' at line {n}\n{l}",
         "operator_not_found": lambda l,n,t: f"operator name not found '{t}' at line {n}\n{l}",
@@ -80,6 +74,7 @@ Labels:         {self.labels}\
             f"token '{t}' duplicated at line {n}\n{l}",
         "expected_closing": lambda l,n,t: \
             f"expected closing '{t}' at line {n}\n{l}",
+        "expected_operator": lambda l,n,t: f"expected operator after '{t}' at line {n}\n{l}",
     }
 
     def __init__(self):
@@ -113,15 +108,9 @@ Labels:         {self.labels}\
             line_1 = line.split("--")[0].strip()
             if not line_1:
                 continue
-            self.check_lexical_errors(line, i)
 
-            if ':' in line_1:
-                label, line_1 = line_1.split(':', 1)
-                label = label.strip()
-                if label in self.labels:
-                    raise ValueError(f"Duplicate label '{label}' on line {i+1}")
-                self.labels[label] = len(self.instructions)
-            self.instructions.append(line_1)
+            self.check_lexical_errors(line, i)
+            self.check_syntax_errors(line, i)
 
     def run(self):
         "Run code"
@@ -143,9 +132,7 @@ Labels:         {self.labels}\
         line = line.strip()
         line_1 = line.split("--")[0].split()
         if not line_1:
-            returns
-        if not line[0].isalpha():
-            raise NameError(self.ERROR_MESSAGES["invalid_token"](line, line_index, line[0]))
+            return
 
         # For each token, lexic check
         for token in line_1:
@@ -158,39 +145,65 @@ Labels:         {self.labels}\
         if token[-1] == ':':
             token = token[:-1]
         if token[0].isnumeric() and not token.isnumeric():
-            print(token)
-            raise NameError(self.ERROR_MESSAGES["invalid_token"](
-                line, line_number, token[0]))
+            raise LexicalError(self.ERROR_MESSAGES["invalid_token"](
+                line, line_number, token))
         for char in token:
             if not (char.isalnum() or char in "_"):
-                raise NameError(self.ERROR_MESSAGES["invalid_token"](line, line_number, char))
+                raise LexicalError(self.ERROR_MESSAGES["invalid_token"](line, line_number, char))
+
+    def treat_line(self, line:str) -> list:
+        "Treat assembly line and return teated line and a list of tokens"
+        line_treated = line.strip()  # Ignore spaces
+        line_treated = line_treated.split("--")[0]  # Ignore comment
+        line_treated = re.sub(r'"[^"]*"', '""', line_treated)
+        return line_treated
 
     def check_syntax_errors(self, line:str, line_index):
         """
         Check for lexical errors in a given line of assembly code.
 
-        :param line: A string containing a line of assembly code.
-        :return: A list of lexical errors found in the line,\
+        line: A string containing a line of assembly code.
+        return: A list of lexical errors found in the line,\
             or an empty list if no errors were found.
+
+        Criteria:
+            - Error in structure
+            - Missing operators
+            - Unbalanced parenthesis or quotes, etc
         """
 
-        errors = []
-        chunk = 0
-
         # Check for invalid characters
-        line = line.strip()  # Ignore spaces
-        line_treated = line.split("--")[0].split()  # Ignore comment
-        line_treated = re.sub(r'"[^"]*"', '', line_treated)  # Ignore quoted string
-        if not line_treated:
+        line_treated = self.treat_line(line)
+        tokens = line_treated.split()
+
+        if not tokens:
             return
 
-        # string
-        if line_treated.count('"'):
-            raise SyntaxError(self.ERROR_MESSAGES["expected_closing"](line, line_index, ':'))
+        # open close string
+        if line_treated.count('"') % 2:  # if number of " is odd
+            raise SyntaxError(self.ERROR_MESSAGES["expected_closing"](line, line_index, '"'))
 
-        # label
-        if line.count(':') > 1:
+        # label unique two dots
+        if line_treated.count(':') > 1:
             raise SyntaxError(self.ERROR_MESSAGES["duplicated_token"](line, line_index, ':'))
+
+        # label, mnemonic
+        operator_index = 0
+        if self.operator_is_label(tokens[operator_index]):
+            operator_index += 1
+        if self.operator_is_mnemonic(tokens[operator_index]):
+            operator_index += 1
+        else:
+            raise SyntaxError(self.ERROR_MESSAGES["invalid_mnemonic"](
+                line, line_index, tokens[operator_index]))
+
+        operators = tokens[operator_index:]
+        if operators:
+            commas = ''.join(operators).count(',')
+            if commas < len(operators)-1:
+                raise SyntaxError(self.ERROR_MESSAGES["expected_operator"](line, line_index, ','))
+            if commas > len(operators)-1:
+                raise SyntaxError(self.ERROR_MESSAGES["expected_token"](line, line_index, ','))
 
     def validate_operator_semantic(self, opr, line, line_index):
         "Validate register, [pointer], or literal"
@@ -205,6 +218,10 @@ Labels:         {self.labels}\
 
         :param line: A string containing a line of assembly code.
         :return: A list of syntactic errors found in the line, or an empty list if no errors were found.
+
+        Criteria:
+            - pre defined mnemonic exists
+            - missing or expected token or operator
         """
         errors = []
         # Split the line into its components
@@ -232,11 +249,15 @@ Labels:         {self.labels}\
 
     def operator_is_label(self, src):
         "If operator is label"
-        return src in self.labels
+        return str(src).endswith(':') or src in self.labels
 
     def operator_is_value(self, src):
         "If operator is value"
         return not self.operator_is_register(src) and not self.operator_is_label(src)
+
+    def operator_is_mnemonic(self, src):
+        "If operator is mnemonic"
+        return src in self.get_mnemonics()
 
     def get_operator(self, src):
         "Get operator value based on register or pointer"
@@ -244,7 +265,7 @@ Labels:         {self.labels}\
         if self.operator_is_register(src):
             return self.registers[src]
         # memory
-        elif self.operator_is_label(src):
+        elif src in self.labels:
             return self.memory[self.labels[src]]
         # value
         else:
@@ -255,13 +276,13 @@ Labels:         {self.labels}\
                 return astype(src)
             return src
 
-    def set_operator(self, value, reference:str):
-        "Set operator value based on register or pointer"
-        if reference[:0]+reference[:1] == "[]":
-            label = self.labels[reference[1:-1]]
-            self.memory[label] = value
+    def set_operator(self, src_value, dst:str):
+        "Set operator value based on register or label"
+        if dst in self.labels:
+            label = self.labels[dst]
+            self.memory[label] = src_value
         else:
-            self.registers[reference] = value
+            self.registers[dst] = src_value
 
     def get_mnemonics(self):
         "Return a list of mnemonic names"
@@ -344,8 +365,13 @@ Labels:         {self.labels}\
         if _type == "2":
             print(chr(int(self.memory[int(address)])))
 
+    @_mnemonic
+    def halt(self):
+        "Stop code"
+
 MY_CODE = """\
-    VAR     teste 3
+    VAR     teste, 3
+    MOVE    teste, 10
     INT     1, 4
     INT     2, 4
     MOVE    A, 6        -- Coloco o valor 6 no registrador A
@@ -360,10 +386,11 @@ enquanto:   MOVE  C, B  -- Coloco no registrador C o valor presente no registrad
 fim:        HALT
 """
 
-assembler = MiniAssembler()
-assembler.validate(MY_CODE)
-# assembler.load(MY_CODE)
-# print(assembler.registers)
-# assembler.run()
-# print(assembler)
-# print(assembler.registers) # {'A': 12, 'B
+if __name__ == "__main__":
+    assembler = MiniAssembler()
+    assembler.validate(MY_CODE)
+    assembler.load(MY_CODE)
+    # print(assembler.registers)
+    assembler.run()
+    print(assembler)
+    # print(assembler.registers) # {'A': 12, 'B
