@@ -121,8 +121,6 @@ Labels:         {self.labels}\
                 return
             if operation in self.get_mnemonics():
                 getattr(self, operation.lower())(*[i.strip(',') for i in args])
-            else:
-                raise Exception(f'Unknown instruction: {instruction}')
             self.pc += 1
 
     def check_lexical_errors(self, line:str, line_index):
@@ -204,44 +202,6 @@ Labels:         {self.labels}\
                 raise SyntaxError(self.ERROR_MESSAGES["expected_operator"](line, line_index, ','))
             if commas > len(operators)-1:
                 raise SyntaxError(self.ERROR_MESSAGES["expected_token"](line, line_index, ','))
-
-    def validate_operator_semantic(self, opr, line, line_index):
-        "Validate register, [pointer], or literal"
-
-        if self.operator_is_label(opr) and self.operator_is_register(opr):
-            raise SyntaxError(self.ERROR_MESSAGES["duplicated_operator"](
-                line, line_index, opr[-1:]))
-
-    def check_semantic_errors(self, line):
-        """
-        Check for syntactic errors in a given line of assembly code.
-
-        :param line: A string containing a line of assembly code.
-        :return: A list of syntactic errors found in the line, or an empty list if no errors were found.
-
-        Criteria:
-            - pre defined mnemonic exists
-            - missing or expected token or operator
-        """
-        errors = []
-        # Split the line into its components
-        label, sep, rest = line.partition(':')
-        mnemonic, sep, operands = rest.lstrip().partition(' ')
-        operands = operands.split(',')
-
-        # Check for invalid label
-        if label and not label.isalnum():
-            errors.append('Invalid label')
-
-        # Check for invalid mnemonic
-        if mnemonic not in self.get_mnemonics():
-            errors.append('Invalid mnemonic')
-
-        # Check for invalid number of operands
-        if mnemonic in ['MOVE', 'ADD', 'SUBT', 'MULT', 'DIV'] and len(operands) != 2:
-            errors.append('Invalid number of operands')
-
-        return errors
 
     def operator_is_register(self, src):
         "If operator is register"
@@ -390,7 +350,5 @@ if __name__ == "__main__":
     assembler = MiniAssembler()
     assembler.validate(MY_CODE)
     assembler.load(MY_CODE)
-    # print(assembler.registers)
     assembler.run()
     print(assembler)
-    # print(assembler.registers) # {'A': 12, 'B
