@@ -185,46 +185,46 @@ Labels:         {self.labels}\
             if commas > len(operators)-1:
                 raise SyntaxError(self.ERROR_MESSAGES["expected_token"](line, line_index, ','))
 
-    def operator_is_register(self, src):
+    def operator_is_register(self, operator):
         "If operator is register"
-        return src in self.registers
+        return operator in self.registers
 
-    def operator_is_label(self, src):
+    def operator_is_label(self, operator):
         "If operator is label"
-        return str(src).endswith(':') or src in self.labels
+        return str(operator).endswith(':') or operator in self.labels
 
-    def operator_is_value(self, src):
+    def operator_is_value(self, operator):
         "If operator is value"
-        return not self.operator_is_register(src) and not self.operator_is_label(src)
+        return not self.operator_is_register(operator) and not self.operator_is_label(operator)
 
-    def operator_is_mnemonic(self, src):
+    def operator_is_mnemonic(self, operator):
         "If operator is mnemonic"
-        return src in self.get_mnemonics()
+        return operator in self.get_mnemonics()
 
-    def get_operator(self, src):
+    def get_operator(self, operator):
         "Get operator value based on register or pointer"
         # register
-        if self.operator_is_register(src):
-            return self.registers[src]
+        if self.operator_is_register(operator):
+            return self.registers[operator]
         # memory
-        elif src in self.labels:
-            return self.memory[self.labels[src]]
+        elif self.operator_is_label(operator):
+            return self.memory[self.labels[operator]]
         # value
         else:
-            if src.isnumeric():
+            if operator.isnumeric():
                 astype = int
-                if  '.' in src:
+                if  '.' in operator:
                     astype = float
-                return astype(src)
-            return src
+                return astype(operator)
+            return operator
 
-    def set_operator(self, src_value, dst:str):
+    def set_operator(self, operator_value, dst:str):
         "Set operator value based on register or label"
         if dst in self.labels:
             label = self.labels[dst]
-            self.memory[label] = src_value
+            self.memory[label] = operator_value
         else:
-            self.registers[dst] = src_value
+            self.registers[dst] = operator_value
 
     def get_mnemonics(self):
         "Return a list of mnemonic names"
