@@ -12,6 +12,7 @@ Fonte:
 """
 
 import re
+import os
 
 class LexicalError(Exception):
     "To represent lexical errors"
@@ -127,7 +128,7 @@ Labels:         {self.labels}\
             raise LexicalError(self.ERROR_MESSAGES["invalid_token"](
                 line, line_number, token))
         for char in token:
-            if not (char.isalnum() or char in "_"):
+            if not (char.isalnum() or char in "_\""):
                 raise LexicalError(self.ERROR_MESSAGES["invalid_token"](line, line_number, char))
 
     def treat_line(self, line:str) -> list:
@@ -298,7 +299,7 @@ Labels:         {self.labels}\
 
     @_mnemonic(param_type=[["addr"]])
     def int(self, _type, address:str):
-        "Read/write ascii character from memory address"
+        "Read (1) or write (2) ascii character from memory address"
         if not address.isnumeric():
             return
         if _type == "1":
@@ -310,24 +311,18 @@ Labels:         {self.labels}\
     def halt(self):
         "Stop code"
 
-MY_CODE = """\
-    VAR     teste, 3
-    MOVE    teste, 10
-    INT     1, 4
-    INT     2, 4
-    MOVE    A, 6        -- Coloco o valor 6 no registrador A
-    MOVE    B, 5        -- Coloco o valor 5 no registrador A
-enquanto:   MOVE  C, B  -- Coloco no registrador C o valor presente no registrador B
-    CMP     B, 1        -- Comparo o valor presente em B com o valor 1. O resultado fica no registrador CR
-    JTRUE   fim         -- Se CR tiver o valor 1, então JUMP para a linha com o label fim
-    MOVE    B, C        -- Coloco em B o valor presente em C
-    MULT    A, B        -- Multiplico o valor presente em A com o valor presente em B. O resultado ficará em A
-    SUBT    B, 1        -- Subtraio 1 no o valor presente em B
-    JUMP    enquanto    -- JUMP para linha com o label enquanto.
-fim:        HALT
-"""
 
 if __name__ == "__main__":
+    # Read path
+    SCRIPT_PATH = os.path.abspath(os.path.dirname(__file__))
+    ASSEMBLY_FILE_PATH = input(
+        "Insert a path or type Enter to read sample file './assembly-sample.txt'\n> ")
+    if not ASSEMBLY_FILE_PATH:
+        ASSEMBLY_FILE_PATH = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), "assembly-sample.txt")
+    MY_CODE = open(ASSEMBLY_FILE_PATH, "r", encoding="utf-8").read()
+
+    # Run
     assembler = MiniAssembler()
     assembler.validate(MY_CODE)
     assembler.load(MY_CODE)
