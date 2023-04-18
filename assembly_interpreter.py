@@ -17,17 +17,6 @@ import re
 class LexicalError(Exception):
     "To represent lexical errors"
 
-def universe(function):
-
-    def function_wrapper():
-        return function()
-
-    function_wrapper.a = 1
-    function_wrapper.__doc__ = "doc2"
-    function_wrapper.__name__ = function.__name__
-    
-    return function_wrapper
-
 def _mnemonic(*args, **kwargs):
     "Mnemonic metadata for MiniAssembler"
 
@@ -44,13 +33,6 @@ def _mnemonic(*args, **kwargs):
         function = decorator(args[0])
         return function
 
-    return decorator
-
-def _mnemonic1(mnemonic):
-    "Decorador for mnemonics in MiniAssembler"
-    def decorator(func):
-        func.mnemonic = mnemonic
-        return func
     return decorator
 
 class MiniAssembler:
