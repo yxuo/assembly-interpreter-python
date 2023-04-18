@@ -11,7 +11,6 @@ Fonte:
     - https://www.javatpoint.com/semantic-error
 """
 
-import inspect
 import re
 
 class LexicalError(Exception):
