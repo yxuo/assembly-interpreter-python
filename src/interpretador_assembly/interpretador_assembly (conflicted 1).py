@@ -36,11 +36,11 @@ class InterpretadorAssembly:
         """
         return f"""\
 Memória[{len(self.memory)}]:\t{self.memory}
-Instruções:\t{self.instrucoes}
 Mnemônicos:\t{self.mnemonicos.keys()}
+Instruções:\t{self.instrucoes}
 Registradores:\t{self.registers}
 linha_codigo:\t{self.linha_codigo}
-Variáveis:\t{self.labels}
+Variáveis:\t\t{self.labels}\
 Labels:\t\t{self.labels}\
         """
 
@@ -70,7 +70,6 @@ Labels:\t\t{self.labels}\
         self.instrucoes = []
         self.mnemonicos:Dict[str, Mnemonico] = dict()
         self.injetar_mnemonicos()
-
 
     def carregar_codigo(self, code):
         """
@@ -194,10 +193,10 @@ Labels:\t\t{self.labels}\
 
         # For each token, lexic check
         for token in line_1:
-            self.validar_lexico_token(token, numero_linha, line)
+            self.validate_token_lexic(token, numero_linha, line)
 
-    def validar_lexico_token(self, token:str, line_number, line:str):
-        "Se o nome do token é válido"
+    def validate_token_lexic(self, token:str, line_number, line:str):
+        "Validate token name"
         if token[-1] == ',':
             token = token[:-1]
         if token[-1] == ':':
@@ -207,8 +206,7 @@ Labels:\t\t{self.labels}\
                 line, line_number, token))
         for char in token:
             if not (char.isalnum() or char in "_\""):
-                raise LexicalError(self.MENSAGENS_ERRO_LEXICO[
-                    "invalid_token"](line, line_number, char))
+                raise LexicalError(self.MENSAGENS_ERRO_LEXICO["invalid_token"](line, line_number, char))
 
     def treat_line(self, line:str):
         "Treat assembly line and return teated line and a list of tokens"
@@ -295,33 +293,19 @@ Labels:\t\t{self.labels}\
             # Erro: tipo de parâmetro incorreto
             if self.mnemonicos[mnemonico].parametros:
                 for i, operator in enumerate(operators):
-                    operator_treated = operator.strip(',')
                     tipos_permitidos = self.mnemonicos[mnemonico].parametros[i]["tipos_permitidos"]
-                    tipos_token = self.get_tipo_token(operator_treated)
-                    tipos_encontrados = [
-                        tipo_token in tipos_permitidos for tipo_token in tipos_token]
-
-                    # Se for label, variavel ou registrador, basta ver se é um nome válido
-                    possui_nome_valido = any([t for t in tipos_permitidos if t in (
-                        "label", "variavel", "registrador")])
+                    tipos_token = self.get_tipo_token(operator)
 
                     # se não tiver nenhum token em tipos permitidos, erro
-                    if not any(tipos_encontrados) and not possui_nome_valido:
+                    if not any([tipo_token not in tipos_permitidos \
+                        for tipo_token in tipos_token]):
                         raise SyntaxError(self.MENSAGENS_ERRO_SINTATICO[
-                            "invalid_type"](line, line_index, operator_treated))
+                            "invalid_type"](line, line_index, operator))
 
 
-    def token_e_nome_variavel(self, operator:str):
-        "Se token é nome válido de variável"
-        try:
-            self.validar_lexico_token(operator, 0, "")
-            return not operator.isnumeric()
-        except LexicalError:
-            return False
-
-    def token_e_endereco(self, operator:str):
+    def token_e_endereco(self, operator):
         "Se token é endereço de memória válido"
-        return operator.isnumeric() and int(operator) >= 0 and int(operator) < len(self.memory)
+        return operator.isnumeric() and int(operator) >= 0 and int(operator) < len(self.registers)
 
     def token_e_variavel(self, operator):
         "Se token é variável"
@@ -335,38 +319,29 @@ Labels:\t\t{self.labels}\
         "Se token é label"
         return str(operator).endswith(':') or operator in self.labels
 
-    def token_e_literal(self, operator:str):
+    def token_e_literal(self, operator):
         "Se token é literal ('abc' ou 123)"
-        operador_e_str = len(operator) > 1 and operator[0]+operator[-1] == '""'
-
-        return operador_e_str or operator.isnumeric()
+        return not self.token_e_registrador(operator) and not self.token_e_label(operator)
 
     def token_e_mnemonico(self, operator):
         "Se token é mnemonico"
         return operator in self.mnemonicos
 
-    def get_tipo_token(self, token) -> list:
+    def get_tipo_token(self, token) -> str:
         """
-        Dado um token, retorna os tipos possíveis
+        Dado um token, retorna seu tipo como string
         """
         tipos_encontrados = []
-
-        if self.token_e_endereco(token):
-            tipos_encontrados += ["endereco"]
         if self.token_e_label(token):
-            tipos_encontrados += ["label"]
-        if self.token_e_literal(token):
-            tipos_encontrados += ["literal"]
-        if self.token_e_nome_variavel(token):
-            tipos_encontrados += ["nome_variavel"]
-        if self.token_e_mnemonico(token):
-            tipos_encontrados += ["mnemonico"]
-        if self.token_e_registrador(token):
-            tipos_encontrados += ["registrador"]
-        if self.token_e_variavel(token):
-            tipos_encontrados += ["variavel"]
-
-        return tipos_encontrados
+            return "label"
+        elif self.token_e_literal(token):
+            return "literal"
+        elif self.token_e_mnemonico(token):
+            return "mnemonico"
+        elif self.token_e_registrador(token):
+            return "registrador"
+        else:
+            return "INVALIDO"
 
     def get_operator(self, operator):
         "Get operator value based on register or pointer"
@@ -392,10 +367,6 @@ Labels:\t\t{self.labels}\
             self.memory[label] = operator_value
         else:
             self.registers[destino] = operator_value
-
-    def get_memory(self, memory_address:int):
-        "Get content from memory address"
-        return self.memory[memory_address]
 
     def injetar_mnemonicos(self):
         """

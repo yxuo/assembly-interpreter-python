@@ -23,4 +23,7 @@ if __name__ == "__main__":
     assembler.executar_validacao(MY_CODE)
     assembler.carregar_codigo(MY_CODE)
     assembler.executar_codigo()
+
+    print("---")
+    print("Conteúdo do interpretador:")
     print(assembler)
