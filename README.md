@@ -1,4 +1,4 @@
-# Trabalho - Leitor assembly
+# Trabalho - Interpretador assembly
 
 ## TDE #01 - Criação de um Interpretador Assembly
 Alessandro de Almeida Castro Cerqueira - 
